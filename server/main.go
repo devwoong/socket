@@ -48,13 +48,13 @@ func clientHandle(conn net.Conn, id int) {
 
 	go messageChat(id)
 	go sendMessageHandle(id)
-	go messageRead(conn, id)
+	go messageRead(id)
 	go recvMessageHandle(id)
 
 CLIENTEND:
 	for {
 		select {
-		case <-server.Exit[id]:
+		case <-server.Clients[id].Exit:
 			fmt.Printf("client %d exit \n", id)
 			server.DeleteClient(id)
 			break CLIENTEND
@@ -62,11 +62,11 @@ CLIENTEND:
 	}
 }
 
-func messageRead(conn net.Conn, id int) {
+func messageRead(id int) {
 	for {
 		readPacket := protocol.Packet{}
 
-		r := bufio.NewReader(conn)
+		r := bufio.NewReader(server.Clients[id].Conn)
 		readPacket.Data = make([]byte, 1024)
 		n, err := r.Read(readPacket.Data)
 		//n, err := conn.Read(readPacket.Data)
@@ -76,7 +76,7 @@ func messageRead(conn net.Conn, id int) {
 		if n != 0 {
 			message := readPacket.UnPack(n)
 			server.Clients[id].SendPacket <- message
-			fmt.Fprintf(os.Stdout, "read size : %d", n)
+			fmt.Printf("read size : %d \n", n)
 		}
 
 	}
@@ -87,10 +87,21 @@ EXITRECV:
 	for {
 		select {
 		case message := <-server.Clients[idx].SendPacket:
-			if message.Msg == "&&EXIT&&" {
+			switch message.Msg {
+			case "&&EXIT&&":
 				break EXITRECV
-			} else {
-				fmt.Printf("client %d message \n: %s", idx, message.Msg)
+			case "&&ISALIVE&&":
+				{
+					Message := protocol.Message{}
+					Message.Msg = "&&ALIVE&&"
+					server.Clients[idx].RecvPacket <- Message
+				}
+			case "&&ALIVE&&":
+				{
+					server.Clients[idx].IsAlive = true
+				}
+			default:
+				fmt.Printf("client %d message : %s \n", idx, message.Msg)
 			}
 		}
 	}
@@ -100,9 +111,10 @@ EXIT:
 	for {
 		select {
 		case message := <-server.Clients[idx].RecvPacket:
-			if message.Msg == "&&EXIT&&" {
+			switch message.Msg {
+			case "&&EXIT&&":
 				break EXIT
-			} else {
+			default:
 				sendPack := message.Pack()
 				_, err := server.Clients[idx].Conn.Write(sendPack.Data[:])
 				if err != nil {
@@ -117,10 +129,18 @@ EXIT:
 
 func messageChat(idx int) {
 	for {
-		chat := "enter send client message  \n"
+		// chat := "enter send client message  \n"
+		// Message := protocol.Message{}
+		// Message.Msg = chat
+		chat := "&&ISALIVE&&"
 		Message := protocol.Message{}
 		Message.Msg = chat
 		server.Clients[idx].RecvPacket <- Message
 		time.Sleep(time.Second * 10)
+		if server.Clients[idx].IsAlive == false {
+			server.Clients[idx].Exit <- true
+		} else {
+			server.Clients[idx].IsAlive = false
+		}
 	}
 }

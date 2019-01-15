@@ -5,8 +5,8 @@ type Packet struct {
 	Buffer [512]byte
 }
 
-func (p *Packet) UnPack() Message {
+func (p *Packet) UnPack(size int) Message {
 	resultMessage := Message{}
-	resultMessage.Msg = string(p.Data[:])
+	resultMessage.Msg = string(p.Data[:size])
 	return resultMessage
 }

@@ -7,10 +7,11 @@ type Client struct {
 	ClientID   int
 	SendPacket chan Message
 	RecvPacket chan Message
+	IsAlive    bool
+	Exit       chan bool
 }
 
 type Server struct {
-	Exit    map[int]chan bool
 	Clients map[int]*Client
 }
 
@@ -22,15 +23,16 @@ func (s *Server) AddClient(client *Client) {
 }
 func (s *Server) DeleteClient(id int) {
 	close(s.Clients[id].RecvPacket)
-	close(s.Exit[id])
+	close(s.Clients[id].SendPacket)
+	s.Clients[id].Conn.Close()
 
 	delete(s.Clients, id)
-	delete(s.Exit, id)
 }
 
 func (c *Client) CreateClient(conn net.Conn, id int) {
 	c.Conn = conn
 	c.ClientID = id
+	c.IsAlive = true
 	c.SendPacket = make(chan Message)
 	c.RecvPacket = make(chan Message)
 }
