@@ -6,6 +6,7 @@ import (
 	"log"
 	"socket/client/message"
 	"socket/client/protocol"
+	"time"
 )
 
 var messageProcs []message.MessageProc
@@ -22,11 +23,6 @@ func main() {
 	if err != nil {
 
 	}
-	// tcpAddr, err := net.ResolveTCPAddr("tcp4", service)
-	// checkError(err)
-
-	// conn, err := net.DialTCP("tcp", nil, tcpAddr)
-	// checkError(err)
 	fmt.Printf("------starting client------")
 	defer protocol.GetInstance().Conn.Close()
 
@@ -84,12 +80,12 @@ func tick() {
 	for _, v := range messageProcs {
 		go v.SendMessage(protocol.GetInstance().Conn)
 	}
-	// for {
-	// 	message := protocol.Message{}
-	// 	message.Msg = "TICK TICK"
-	// 	protocol.GetInstance().SendMessage <- message
-	// 	time.Sleep(time.Second * 3)
-	// }
+	for {
+		message := protocol.Message{}
+		message.Msg = "TICK TICK"
+		protocol.GetInstance().SendMessage <- message
+		time.Sleep(time.Second * 1)
+	}
 }
 
 func sendMessage() {

@@ -3,10 +3,10 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"socket/server/protocol"
-	"time"
 )
 
 var server protocol.Server
@@ -18,7 +18,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Fatal errors  : %s", err.Error())
 		os.Exit(1)
 	}
-	fmt.Fprint(os.Stdout, "host Ip : %s \t host port : %s", tcpAddr.IP, tcpAddr.Port)
+	fmt.Fprint(os.Stdout, "host Ip : %s \t host port : %s\n", tcpAddr.IP, tcpAddr.Port)
 	listener, err := net.ListenTCP("tcp4", tcpAddr)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Fatal errors : %s", err.Error())
@@ -37,6 +37,7 @@ func connectLoop(listener *(net.TCPListener)) {
 			continue
 		}
 		go clientHandle(conn, i)
+		//go isAlivceClient()
 		i++
 	}
 }
@@ -46,20 +47,12 @@ func clientHandle(conn net.Conn, id int) {
 	client.CreateClient(conn, id)
 	server.AddClient(&client)
 
-	go messageChat(id)
-	go sendMessageHandle(id)
-	go messageRead(id)
-	go recvMessageHandle(id)
+	fmt.Printf("connect client id : %d, ip : %s \n", id, server.Clients[id].Conn.RemoteAddr())
+	fmt.Printf("current client connet num : %d \n", len(server.Clients))
 
-CLIENTEND:
-	for {
-		select {
-		case <-server.Clients[id].Exit:
-			fmt.Printf("client %d exit \n", id)
-			server.DeleteClient(id)
-			break CLIENTEND
-		}
-	}
+	go sendMessageHandle(id)
+	go recvMessageHandle(id)
+	messageRead(id)
 }
 
 func messageRead(id int) {
@@ -70,7 +63,15 @@ func messageRead(id int) {
 		readPacket.Data = make([]byte, 1024)
 		n, err := r.Read(readPacket.Data)
 		//n, err := conn.Read(readPacket.Data)
-		if err != nil {
+		if err == io.EOF {
+			exit := "&&EXIT&&"
+			exitMessage := protocol.Message{}
+			exitMessage.Msg = exit
+			server.Clients[id].SendPacket <- exitMessage
+			server.Clients[id].RecvPacket <- exitMessage
+			fmt.Printf("client exit id : %d, ip : %s \n", id, server.Clients[id].Conn.RemoteAddr())
+			server.DeleteClient(id)
+			fmt.Printf("current client connet num : %d \n", len(server.Clients))
 			return
 		}
 		if n != 0 {
@@ -82,11 +83,11 @@ func messageRead(id int) {
 	}
 }
 
-func recvMessageHandle(idx int) {
+func recvMessageHandle(id int) {
 EXITRECV:
 	for {
 		select {
-		case message := <-server.Clients[idx].SendPacket:
+		case message := <-server.Clients[id].SendPacket:
 			switch message.Msg {
 			case "&&EXIT&&":
 				break EXITRECV
@@ -94,53 +95,58 @@ EXITRECV:
 				{
 					Message := protocol.Message{}
 					Message.Msg = "&&ALIVE&&"
-					server.Clients[idx].RecvPacket <- Message
+					server.Clients[id].RecvPacket <- Message
 				}
-			case "&&ALIVE&&":
-				{
-					server.Clients[idx].IsAlive = true
-				}
+			// case "&&ALIVE&&":
+			// 	{
+			// 		server.Clients[id].IsAlive = true
+			// 	}
 			default:
-				fmt.Printf("client %d message : %s \n", idx, message.Msg)
+				fmt.Printf("client %d message : %s \n", id, message.Msg)
 			}
 		}
 	}
 }
-func sendMessageHandle(idx int) bool {
+func sendMessageHandle(id int) bool {
 EXIT:
 	for {
 		select {
-		case message := <-server.Clients[idx].RecvPacket:
+		case message := <-server.Clients[id].RecvPacket:
 			switch message.Msg {
 			case "&&EXIT&&":
 				break EXIT
 			default:
 				sendPack := message.Pack()
-				_, err := server.Clients[idx].Conn.Write(sendPack.Data[:])
+				_, err := server.Clients[id].Conn.Write(sendPack.Data[:])
 				if err != nil {
 
 				}
 			}
 		}
-
 	}
 	return true
 }
 
-func messageChat(idx int) {
-	for {
-		// chat := "enter send client message  \n"
-		// Message := protocol.Message{}
-		// Message.Msg = chat
-		chat := "&&ISALIVE&&"
-		Message := protocol.Message{}
-		Message.Msg = chat
-		server.Clients[idx].RecvPacket <- Message
-		time.Sleep(time.Second * 10)
-		if server.Clients[idx].IsAlive == false {
-			server.Clients[idx].Exit <- true
-		} else {
-			server.Clients[idx].IsAlive = false
-		}
-	}
-}
+// func isAlivceClient() {
+// 	live := "&&ISALIVE&&"
+// 	Message := protocol.Message{}
+// 	Message.Msg = live
+// 	for {
+// 		for _, client := range server.Clients {
+// 			if client == nil {
+// 				continue
+// 			}
+// 			go func(client *protocol.Client) {
+// 				if client.IsAlive == false {
+// 					fmt.Printf("client %d exit \n", client.ClientID)
+// 					server.DeleteClient(client.ClientID)
+// 				} else {
+// 					client.RecvPacket <- Message
+// 					client.IsAlive = false
+// 				}
+// 				time.Sleep(time.Second * 10)
+// 			}(client)
+// 		}
+// 		time.Sleep(time.Second * 10)
+// 	}
+// }
