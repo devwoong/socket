@@ -5,7 +5,7 @@ import (
 	"log"
 	"net"
 	"os"
-	"socket/tcp/client/protocol"
+	"socket/client/protocol"
 	"time"
 )
 
@@ -22,6 +22,8 @@ func main() {
 	conn, err := net.DialTCP("tcp", nil, tcpAddr)
 	checkError(err)
 	fmt.Printf("start")
+	// conn.Write([]byte("sdfdsf"))
+	// conn.Write([]byte("\r\n\r\n"))
 	go recvMessage(conn)
 	go sendMessage(conn)
 	for {
@@ -30,18 +32,6 @@ func main() {
 }
 func recvMessage(conn net.Conn) {
 	for {
-		// read, err := ioutil.ReadAll(conn)
-		// if err != nil {
-		// 	checkError(err)
-		// }
-		// if len(read) > 0 {
-		// 	fmt.Printf("read to server message is %s", string(read[:]))
-		// }
-
-		// conn.Write([]byte(message))
-		// conn.Write([]byte(StopCharacter))
-		// log.Printf("Send: %s", message)
-
 		buff := make([]byte, 1024)
 		n, _ := conn.Read(buff)
 		if n > 0 {
@@ -53,20 +43,11 @@ func recvMessage(conn net.Conn) {
 func sendMessage(conn net.Conn) {
 
 	for {
-		// read, err := ioutil.ReadAll(conn)
-		// if err != nil {
-		// 	checkError(err)
-		// }
-		// if len(read) > 0 {
-		// 	fmt.Printf("read to server message is %s", string(read[:]))
-		// }
-
-		Message := protocol.Message{}
-		Message.Msg = "client Mesasge"
-		fmt.Printf("write to server message is %s\n", Message.Msg)
-		conn.Write(Message.Pack().Data[:])
+		message := protocol.Message{}
+		message.Msg = "client Mesasge"
+		fmt.Printf("write to server message is %s\n", message.Pack().Data[:])
+		conn.Write(message.Pack().Data[:])
 		time.Sleep(time.Second * 10)
-		// log.Printf("Send: %s", message)
 	}
 }
 func checkError(err error) {

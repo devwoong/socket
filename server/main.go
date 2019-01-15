@@ -1,10 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"net"
 	"os"
-	"socket/tcp/server/protocol"
+	"socket/server/protocol"
 	"time"
 )
 
@@ -48,7 +49,7 @@ func clientHandle(conn net.Conn, id int) {
 	go messageChat(id)
 	go sendMessageHandle(id)
 	go messageRead(conn, id)
-	go recvMessageHandle()
+	go recvMessageHandle(id)
 
 CLIENTEND:
 	for {
@@ -65,51 +66,36 @@ func messageRead(conn net.Conn, id int) {
 	for {
 		readPacket := protocol.Packet{}
 
-		n, err := conn.Read(readPacket.Data)
+		r := bufio.NewReader(conn)
+		readPacket.Data = make([]byte, 1024)
+		n, err := r.Read(readPacket.Data)
+		//n, err := conn.Read(readPacket.Data)
 		if err != nil {
 			return
 		}
-		server.RecvMessage[id] <- readPacket.UnPack()
-		fmt.Fprintf(os.Stdout, "read size : %d", n)
+		if n != 0 {
+			message := readPacket.UnPack(n)
+			server.Clients[id].SendPacket <- message
+			fmt.Fprintf(os.Stdout, "read size : %d", n)
+		}
 
 	}
 }
 
-func recvMessageHandle() {
+func recvMessageHandle(idx int) {
 EXITRECV:
 	for {
-		for i, v := range server.RecvMessage {
-			select {
-			case message := <-v:
-				if message.Msg == "&&EXIT&&" {
-					break EXITRECV
-				} else {
-					fmt.Printf("client %d message \n: %s", i, message.Msg)
-				}
+		select {
+		case message := <-server.Clients[idx].SendPacket:
+			if message.Msg == "&&EXIT&&" {
+				break EXITRECV
+			} else {
+				fmt.Printf("client %d message \n: %s", idx, message.Msg)
 			}
 		}
 	}
 }
 func sendMessageHandle(idx int) bool {
-	// EXIT:
-	// 	for {
-	// 		for _, v := range server.Clients {
-	// 			select {
-	// 			case message := <-v.RecvPacket:
-	// 				if message.Msg == "&&EXIT&&" {
-	// 					break EXIT
-	// 				} else {
-	// 					sendPack := message.Pack()
-	// 					_, err := v.Conn.Write(sendPack.Data[:])
-	// 					if err != nil {
-
-	// 					}
-	// 				}
-	// 			}
-
-	// 		}
-	// 	}
-
 EXIT:
 	for {
 		select {
@@ -117,12 +103,7 @@ EXIT:
 			if message.Msg == "&&EXIT&&" {
 				break EXIT
 			} else {
-				// w := bufio.NewWriter(server.Clients[idx].Conn)
-				// r := bufio.NewReader(conn)
-				// n, err := r.Read(buf)
 				sendPack := message.Pack()
-				// w.Write(sendPack.Data)
-				// w.Flush()
 				_, err := server.Clients[idx].Conn.Write(sendPack.Data[:])
 				if err != nil {
 
@@ -137,12 +118,6 @@ EXIT:
 func messageChat(idx int) {
 	for {
 		chat := "enter send client message  \n"
-
-		// for _, v := range server.Clients {
-		// 	Message := protocol.Message{}
-		// 	Message.Msg = chat
-		// 	v.RecvPacket <- Message
-		// }
 		Message := protocol.Message{}
 		Message.Msg = chat
 		server.Clients[idx].RecvPacket <- Message
