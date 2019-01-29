@@ -1,8 +1,7 @@
 package protocol
 
 type Packet struct {
-	Data   []byte
-	Buffer [512]byte
+	Data []byte
 }
 
 func (p *Packet) UnPack(size int) Message {
